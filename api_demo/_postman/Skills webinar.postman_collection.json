@@ -1,0 +1,374 @@
+{
+  "info": {
+    "_postman_id": "d10a9659-3a2a-4937-b0f0-ad6e2dcd0c1f",
+    "name": "Skills webinar",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "13054272"
+  },
+  "item": [
+    {
+      "name": "openai",
+      "item": [
+        {
+          "name": "add skill",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{OPENAI_API_KEY}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "type": "file",
+                  "contentType": "application/zip",
+                  "key": "files",
+                  "src": "/Users/pavlokhshanovskyi/Downloads/calculator.zip"
+                }
+              ]
+            },
+            "url": {
+              "raw": "https://api.openai.com/v1/skills",
+              "protocol": "https",
+              "host": [
+                "api",
+                "openai",
+                "com"
+              ],
+              "path": [
+                "v1",
+                "skills"
+              ]
+            },
+            "description": "Generated from cURL: curl --location \"https://api.openai.com/v1/skills\" \\\n  --header \"Authorization: Bearer {{OPENAI_API_KEY}}\" \\\n  --form \"files=@{{SKILLS_DIR}}/calculator.zip;type=application/zip\""
+          },
+          "response": []
+        },
+        {
+          "name": "call model",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{OPENAI_API_KEY}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"model\": \"gpt-5.2\",\n    \"input\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"What is 2^10 + sqrt(144)?\"\n      }\n    ],\n    \"tools\": [\n      {\n        \"type\": \"shell\",\n        \"environment\": {\n          \"type\": \"container_auto\",\n          \"skills\": [\n            { \"type\": \"skill_reference\", \"skill_id\": \"{{OPENAI_SKILL_ID}}\" }\n          ]\n        }\n      }\n    ]\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://api.openai.com/v1/responses",
+              "protocol": "https",
+              "host": [
+                "api",
+                "openai",
+                "com"
+              ],
+              "path": [
+                "v1",
+                "responses"
+              ]
+            },
+            "description": "Generated from cURL: curl --location \"https://api.openai.com/v1/responses\" \\\n  --header \"Authorization: Bearer {{OPENAI_API_KEY}}\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\n    \"model\": \"gpt-5.2\",\n    \"input\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"What is 2^10 + sqrt(144)?\"\n      }\n    ],\n    \"tools\": [\n      {\n        \"type\": \"shell\",\n        \"environment\": {\n          \"type\": \"container_auto\",\n          \"skills\": [\n            { \"type\": \"skill_reference\", \"skill_id\": \"<OPENAI_SKILL_ID>\" }\n          ]\n        }\n      }\n    ]\n  }'"
+          },
+          "response": []
+        },
+        {
+          "name": "next model call",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{OPENAI_API_KEY}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"model\": \"gpt-5.2\",\n    \"previous_response_id\": \"resp_012ccb146fd7f59a006a0ac8161c60819688aa1a77e54d73ce\",\n    \"input\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Now compute sin(pi / 2) + cos(0).\"\n      }\n    ],\n    \"tools\": [\n      {\n        \"type\": \"shell\",\n        \"environment\": {\n          \"type\": \"container_auto\",\n          \"skills\": [\n            { \"type\": \"skill_reference\", \"skill_id\": \"{{OPENAI_SKILL_ID}}\" }\n          ]\n        }\n      }\n    ]\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://api.openai.com/v1/responses",
+              "protocol": "https",
+              "host": [
+                "api",
+                "openai",
+                "com"
+              ],
+              "path": [
+                "v1",
+                "responses"
+              ]
+            },
+            "description": "Generated from cURL: curl --location \"https://api.openai.com/v1/responses\" \\\n  --header \"Authorization: Bearer {{OPENAI_API_KEY}}\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\n    \"model\": \"gpt-5.2\",\n    \"previous_response_id\": \"<OPENAI_PREV_RESPONSE_ID>\",\n    \"input\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"Now compute sin(pi / 2) + cos(0).\"\n      }\n    ],\n    \"tools\": [\n      {\n        \"type\": \"shell\",\n        \"environment\": {\n          \"type\": \"container_auto\",\n          \"skills\": [\n            { \"type\": \"skill_reference\", \"skill_id\": \"<OPENAI_SKILL_ID>\" }\n          ]\n        }\n      }\n    ]\n  }'"
+          },
+          "response": []
+        },
+        {
+          "name": "delete skill",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{OPENAI_API_KEY}}"
+              }
+            ],
+            "url": {
+              "raw": "https://api.openai.com/v1/skills/{{OPENAI_SKILL_ID}}",
+              "protocol": "https",
+              "host": [
+                "api",
+                "openai",
+                "com"
+              ],
+              "path": [
+                "v1",
+                "skills",
+                "{{OPENAI_SKILL_ID}}"
+              ]
+            },
+            "description": "Generated from cURL: curl --location --request DELETE \"https://api.openai.com/v1/skills/<OPENAI_SKILL_ID>\" \\\n  --header \"Authorization: Bearer {{OPENAI_API_KEY}}\""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "anthropic",
+      "item": [
+        {
+          "name": "get skills",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{ANTHROPIC_API_KEY}}"
+              },
+              {
+                "key": "anthropic-version",
+                "value": "2023-06-01"
+              },
+              {
+                "key": "anthropic-beta",
+                "value": "skills-2025-10-02"
+              }
+            ],
+            "url": {
+              "raw": "https://api.anthropic.com/v1/skills",
+              "protocol": "https",
+              "host": [
+                "api",
+                "anthropic",
+                "com"
+              ],
+              "path": [
+                "v1",
+                "skills"
+              ]
+            },
+            "description": "Generated from cURL: curl --location \"https://api.anthropic.com/v1/skills/<ANTHROPIC_SKILL_ID>/versions\" \\\n  --header \"x-api-key: {{ANTHROPIC_API_KEY}}\" \\\n  --header \"anthropic-version: 2023-06-01\" \\\n  --header \"anthropic-beta: skills-2025-10-02\""
+          },
+          "response": []
+        },
+        {
+          "name": "add skill",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{ANTHROPIC_API_KEY}}"
+              },
+              {
+                "key": "anthropic-version",
+                "value": "2023-06-01"
+              },
+              {
+                "key": "anthropic-beta",
+                "value": "skills-2025-10-02"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "type": "text",
+                  "key": "display_title",
+                  "value": "calculator"
+                },
+                {
+                  "type": "file",
+                  "contentType": "application/zip",
+                  "key": "files[]",
+                  "src": "/Users/pavlokhshanovskyi/Downloads/calculator.zip"
+                }
+              ]
+            },
+            "url": {
+              "raw": "https://api.anthropic.com/v1/skills",
+              "protocol": "https",
+              "host": [
+                "api",
+                "anthropic",
+                "com"
+              ],
+              "path": [
+                "v1",
+                "skills"
+              ]
+            },
+            "description": "Generated from cURL: curl --location \"https://api.anthropic.com/v1/skills\" \\\n  --header \"x-api-key: {{ANTHROPIC_KEY}}\" \\\n  --header \"anthropic-version: 2023-06-01\" \\\n  --header \"anthropic-beta: skills-2025-10-02\" \\\n  --form \"display_title=calculator\" \\\n  --form \"files[]=@{{SKILLS_DIR}}/calculator-anthropic.zip;type=application/zip\""
+          },
+          "response": []
+        },
+        {
+          "name": "call model",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{ANTHROPIC_API_KEY}}"
+              },
+              {
+                "key": "anthropic-version",
+                "value": "2023-06-01"
+              },
+              {
+                "key": "anthropic-beta",
+                "value": "code-execution-2025-08-25,skills-2025-10-02"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"model\": \"claude-sonnet-4-6\",\n    \"max_tokens\": 4096,\n    \"messages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"What is 2^10 + sqrt(144)?\"\n      }\n    ],\n    \"container\": {\n      \"skills\": [\n        {\n          \"type\": \"custom\",\n          \"skill_id\": \"{{ANTHROPIC_SKILL_ID}}\",\n          \"version\": \"latest\"\n        }\n      ]\n    },\n    \"tools\": [\n      { \"type\": \"code_execution_20250825\", \"name\": \"code_execution\" }\n    ]\n  }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "https://api.anthropic.com/v1/messages",
+              "protocol": "https",
+              "host": [
+                "api",
+                "anthropic",
+                "com"
+              ],
+              "path": [
+                "v1",
+                "messages"
+              ]
+            },
+            "description": "Generated from cURL: curl --location \"https://api.anthropic.com/v1/messages\" \\\n  --header \"x-api-key: {{ANTHROPIC_API_KEY}}\" \\\n  --header \"anthropic-version: 2023-06-01\" \\\n  --header \"anthropic-beta: code-execution-2025-08-25,skills-2025-10-02\" \\\n  --header \"Content-Type: application/json\" \\\n  --data '{\n    \"model\": \"claude-sonnet-4-6\",\n    \"max_tokens\": 4096,\n    \"messages\": [\n      {\n        \"role\": \"user\",\n        \"content\": \"What is 2^10 + sqrt(144)?\"\n      }\n    ],\n    \"container\": {\n      \"skills\": [\n        {\n          \"type\": \"custom\",\n          \"skill_id\": \"<ANTHROPIC_SKILL_ID>\",\n          \"version\": \"latest\"\n        }\n      ]\n    },\n    \"tools\": [\n      { \"type\": \"code_execution_20250825\", \"name\": \"code_execution\" }\n    ]\n  }'"
+          },
+          "response": []
+        },
+        {
+          "name": "1. delete skill versions",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{ANTHROPIC_API_KEY}}"
+              },
+              {
+                "key": "anthropic-version",
+                "value": "2023-06-01"
+              },
+              {
+                "key": "anthropic-beta",
+                "value": "skills-2025-10-02"
+              }
+            ],
+            "url": {
+              "raw": "https://api.anthropic.com/v1/skills/{{ANTHROPIC_SKILL_ID}}/versions/1779095105768810",
+              "protocol": "https",
+              "host": [
+                "api",
+                "anthropic",
+                "com"
+              ],
+              "path": [
+                "v1",
+                "skills",
+                "{{ANTHROPIC_SKILL_ID}}",
+                "versions",
+                "1779095105768810"
+              ]
+            },
+            "description": "Generated from cURL: curl --location --request DELETE \\\n  \"https://api.anthropic.com/v1/skills/<ANTHROPIC_SKILL_ID>/versions/<ANTHROPIC_SKILL_VERSION>\" \\\n  --header \"x-api-key: {{ANTHROPIC_API_KEY}}\" \\\n  --header \"anthropic-version: 2023-06-01\" \\\n  --header \"anthropic-beta: skills-2025-10-02\""
+          },
+          "response": []
+        },
+        {
+          "name": "2. delete skill itself",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "x-api-key",
+                "value": "{{ANTHROPIC_API_KEY}}"
+              },
+              {
+                "key": "anthropic-version",
+                "value": "2023-06-01"
+              },
+              {
+                "key": "anthropic-beta",
+                "value": "skills-2025-10-02"
+              }
+            ],
+            "url": {
+              "raw": "https://api.anthropic.com/v1/skills/{{ANTHROPIC_SKILL_ID}}",
+              "protocol": "https",
+              "host": [
+                "api",
+                "anthropic",
+                "com"
+              ],
+              "path": [
+                "v1",
+                "skills",
+                "{{ANTHROPIC_SKILL_ID}}"
+              ]
+            },
+            "description": "Generated from cURL: curl --location --request DELETE \"https://api.anthropic.com/v1/skills/<ANTHROPIC_SKILL_ID>\" \\\n  --header \"x-api-key: {{ANTHROPIC_API_KEY}}\" \\\n  --header \"anthropic-version: 2023-06-01\" \\\n  --header \"anthropic-beta: skills-2025-10-02\""
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
