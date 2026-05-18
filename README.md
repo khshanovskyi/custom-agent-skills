@@ -1,4 +1,4 @@
-![Event banner](event-banner.png)
+![Event banner](event-banner.jpg)
 
 # Custom Agent Skills
 
