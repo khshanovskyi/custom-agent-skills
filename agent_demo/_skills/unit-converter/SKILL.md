@@ -30,10 +30,10 @@ Converts a numeric value from one unit to another within the same physical categ
 - **Pressure** — Pa, kPa, bar, psi, atm
 - **Energy** — joules, kilojoules, calories, kilocalories, kWh
 
-The full unit list per category and the conversion factors live in [unit-converter/scripts/convert.py](scripts/convert.py).
+The full unit list per category and the conversion factors live in [scripts/convert.py](scripts/convert.py).
 
 ## Resources
 
-- [examples.md](unit-converter/examples.md) — sample inputs and expected outputs covering each category.
-- [scripts/convert.py](unit-converter/scripts/convert.py) — the `convert_units(value, from_unit, to_unit)` implementation and the `fmt` helper used to format results.
-- [references/how-code-execution-works.md](unit-converter/references/how-code-execution-works.md) — how the `execute_code` tool runs the script, manages sessions, and combines `script_path` with `code`.
+- [examples.md](examples.md) — sample inputs and expected outputs covering each category.
+- [scripts/convert.py](scripts/convert.py) — the `convert_units(value, from_unit, to_unit)` implementation and the `fmt` helper used to format results.
+- [references/how-code-execution-works.md](references/how-code-execution-works.md) — how the `execute_code` tool runs the script, manages sessions, and combines `script_path` with `code`.

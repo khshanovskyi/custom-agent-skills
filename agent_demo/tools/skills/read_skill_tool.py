@@ -20,8 +20,8 @@ class ReadSkillTool(BaseTool):
         return (
             "Read a skill file by its path. Use this to access skill instructions, "
             "scripts, references, or any other skill resource. "
-            "Paths are relative to the skills root, e.g. /calculator/SKILL.md "
-            "or /calculator/scripts/calculate.py"
+            "Paths are relative to the skills root, e.g. /{skill_name}/SKILL.md "
+            "or /{skill_name}/scripts/calculate.py"
         )
 
     @property
@@ -33,7 +33,7 @@ class ReadSkillTool(BaseTool):
                     "type": "string",
                     "description": (
                         "Path to the skill file relative to the skills root. "
-                        "E.g. /calculator/SKILL.md or /calculator/scripts/calculate.py"
+                        "E.g. /{skill_name}/SKILL.md or /{skill_name}/scripts/calculate.py"
                     ),
                 }
             },
