@@ -15,25 +15,26 @@ allowed-tools: execute_code
 
 # Unit Converter
 
-Converts a numeric value from one unit to another within the same physical category and returns the converted value along with the detected category.
+Performs a one-shot conversion between two units that belong to the same physical category.
 
-## Supported categories and units
+## Function
 
-- **Length** — km, miles, feet, inches (plus meters, centimeters, millimeters, yards)
-- **Weight** — kg, lbs, oz, stone (plus grams, milligrams, tonnes)
-- **Temperature** — Celsius, Fahrenheit, Kelvin
-- **Volume** — liters, gallons, cups, ml (plus pints, quarts, fluid ounces)
-- **Area** — m², acres, ft² (plus km², hectares, square miles)
-- **Speed** — km/h, mph, knots (plus m/s, ft/s)
-- **Time** — seconds, minutes, hours, days, weeks, months, years
-- **Data storage** — bytes, KB, MB, GB, TB, PB
-- **Pressure** — Pa, kPa, bar, psi, atm
-- **Energy** — joules, kilojoules, calories, kilocalories, kWh
+`convert_units(value, from_unit, to_unit)` → `(result: float, category: str)`
 
-The full unit list per category and the conversion factors live in [scripts/convert.py](scripts/convert.py).
+- `result` is `value` expressed in `to_unit`.
+- `category` is the detected physical category — one of `length`, `weight`, `temperature`, `volume`, `area`, `speed`, `time`, `data`, `pressure`, `energy`.
+- Unit names are case-insensitive and accept common aliases: `pounds`, `lbs`, `lb`, and `pound` all refer to the same unit; so do `kilometers`, `kilometer`, and `km`; `sec` is accepted as `seconds`; and so on. See [references/examples.md](references/examples.md) for the full alias list per category.
+
+A `fmt(value)` helper is also provided for pretty-printing numeric results (scientific notation for very large or very small values, comma grouping for thousands).
+
+## Errors
+
+`convert_units` raises `ValueError`:
+
+- `Unknown unit: '<unit>'` — the unit isn't recognized in any category. Surface the message and ask the user to clarify.
+- `Cannot convert between '<a>' (<cat_a>) and '<b>' (<cat_b>)` — the two units belong to different categories. Surface the message; do not attempt to bridge categories.
 
 ## Resources
 
-- [examples.md](examples.md) — sample inputs and expected outputs covering each category.
-- [scripts/convert.py](scripts/convert.py) — defines `convert_units(value, from_unit, to_unit)` and the `fmt` helper. Inside `execute_code` the same file is available at `/skills/unit-converter/scripts/convert.py`.
-- [references/how-code-execution-works.md](references/how-code-execution-works.md) — how the `execute_code` tool runs code, what's available in the sandbox, and the response shape.
+- [references/examples.md](references/examples.md) — sample natural-language inputs mapped to function arguments, the full alias list per category, and example error outputs.
+- [scripts/convert.py](scripts/convert.py) — implementation. Inside `execute_code` the same file is available at `/skills/unit-converter/scripts/convert.py`.
