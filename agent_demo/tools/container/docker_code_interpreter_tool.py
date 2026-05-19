@@ -1,8 +1,10 @@
-"""Docker-sandboxed Python code interpreter tool.
+"""Docker-sandboxed code interpreter tool.
 
-Each session maps to a long-running Docker container with no network access.
-The container runs `_runner.py` (mounted read-only), which speaks a JSON-line
-protocol over stdin/stdout. State persists within a session.
+A single long-running container per tool instance is started lazily on first
+use. Python state (variables, imports) persists across calls; bash invocations
+are stateless. The skills directory is bind-mounted read-only at `/skills`
+inside the sandbox, so skill scripts and references are reachable from
+executed code without copying them into the request payload.
 """
 import asyncio
 import json
@@ -10,23 +12,18 @@ import secrets
 from pathlib import Path
 from typing import Any, Optional
 
-from agent_demo.file_utils import get_file_content
 from agent_demo.tools.base import BaseTool
 from agent_demo.tools.container._response import _ExecutionResult
 
 _RUNNER_FILENAME = "_runner.py"
 _CONTAINER_RUNNER_PATH = "/runner.py"
-_SESSION_INSTRUCTIONS = (
-    "Reuse this session_id for subsequent calls in this conversation. "
-    "Variables and imports persist within the session."
-)
+_CONTAINER_SKILLS_PATH = "/skills"
 
 
 class _Session:
-    """Wraps one long-running container subprocess and serializes calls into it."""
+    """Wraps the running container subprocess and serializes calls into it."""
 
-    def __init__(self, session_id: str, proc: asyncio.subprocess.Process):
-        self.session_id = session_id
+    def __init__(self, proc: asyncio.subprocess.Process):
         self._proc = proc
         self._lock = asyncio.Lock()
 
@@ -34,12 +31,12 @@ class _Session:
     def alive(self) -> bool:
         return self._proc.returncode is None
 
-    async def execute(self, code: str, timeout: float) -> dict:
+    async def execute(self, code: str, language: str, timeout: float) -> dict:
         async with self._lock:
             if not self.alive:
-                raise RuntimeError(f"session {self.session_id} container has exited")
+                raise RuntimeError("sandbox container has exited")
 
-            payload = (json.dumps({"code": code}) + "\n").encode("utf-8")
+            payload = (json.dumps({"code": code, "language": language}) + "\n").encode("utf-8")
             try:
                 self._proc.stdin.write(payload)
                 await self._proc.stdin.drain()
@@ -53,7 +50,7 @@ class _Session:
                 line = await asyncio.wait_for(self._proc.stdout.readline(), timeout)
             except asyncio.TimeoutError:
                 raise RuntimeError(
-                    f"code execution exceeded {timeout:.0f}s timeout; session terminated"
+                    f"code execution exceeded {timeout:.0f}s timeout; sandbox terminated"
                 )
 
             if not line:
@@ -82,11 +79,12 @@ class _Session:
 
 
 class DockerCodeInterpreterTool(BaseTool):
-    """Executes Python code in an isolated Docker container with no network access.
+    """Executes code in an isolated Docker container with no network access.
 
-    Each `session_id` maps to one long-running container. State (variables,
-    imports) persists within a session. The container is launched with
-    `--network=none` and additional hardening flags.
+    A single container per tool instance is started on first use. Python state
+    persists across calls; bash invocations are stateless. The skills
+    directory is bind-mounted read-only at `/skills` so skill scripts and
+    references are accessible from inside the sandbox.
     """
 
     def __init__(
@@ -113,7 +111,8 @@ class DockerCodeInterpreterTool(BaseTool):
         if not self._runner_path.is_file():
             raise FileNotFoundError(f"runner script not found: {self._runner_path}")
 
-        self._sessions: dict[str, _Session] = {}
+        self._session: Optional[_Session] = None
+        self._session_lock = asyncio.Lock()
 
     @property
     def name(self) -> str:
@@ -122,12 +121,14 @@ class DockerCodeInterpreterTool(BaseTool):
     @property
     def description(self) -> str:
         return (
-            "Execute Python code in a sandboxed Docker container with no network access. "
-            "Pass session_id=\"\" to start a new session; reuse the returned session_id "
-            "for follow-up calls so variables and imports persist. Optional script_path "
-            "(relative to the skills root) loads a script file from disk and prepends "
-            "its contents to `code` before execution — use this on the first call of a "
-            "session to load a skill's script without copying it into the request."
+            "Execute code in a sandboxed Docker container with no network access. "
+            "Use `language` to pick the interpreter: `python` (default) or `bash`. "
+            "Python state (variables, imports) persists across calls; bash invocations "
+            "are stateless. The skills directory is mounted read-only at `/skills`, so "
+            "skill scripts and references can be loaded directly — e.g. "
+            "`exec(open('/skills/<skill-name>/scripts/<file>.py').read())` in Python, "
+            "or `cat /skills/<skill-name>/...` in bash. Python uses REPL-style display: "
+            "the value of a trailing expression is auto-printed via repr()."
         )
 
     @property
@@ -137,22 +138,13 @@ class DockerCodeInterpreterTool(BaseTool):
             "properties": {
                 "code": {
                     "type": "string",
-                    "description": "Python source to execute. May be multi-line.",
+                    "description": "Source to execute. May be multi-line.",
                 },
-                "session_id": {
+                "language": {
                     "type": "string",
+                    "enum": ["python", "bash"],
                     "description": (
-                        "Session identifier. Pass an empty string to start a new "
-                        "session; reuse the value returned in session_info for "
-                        "subsequent calls."
-                    ),
-                },
-                "script_path": {
-                    "type": "string",
-                    "description": (
-                        "Optional path relative to the skills root (e.g. "
-                        "/unit-converter/scripts/convert.py). When set, the file's "
-                        "contents are prepended to `code` before execution."
+                        "Interpreter for `code`. Defaults to `python` when omitted."
                     ),
                 },
             },
@@ -161,48 +153,36 @@ class DockerCodeInterpreterTool(BaseTool):
 
     async def _execute(self, arguments: dict[str, Any]) -> str:
         code = arguments.get("code", "") or ""
-        session_id = arguments.get("session_id") or ""
-        script_path = arguments.get("script_path")
+        language = (arguments.get("language") or "python").lower()
 
-        if script_path:
-            full_path = (self._skills_dir / script_path.lstrip("/")).resolve()
-            script_content = get_file_content(full_path)
-            code = f"{script_content}\n\n{code}"
-
-        new_session = not session_id
-        if new_session:
-            session_id = secrets.token_hex(8)
-            self._sessions[session_id] = await self._start_session(session_id)
-
-        session = self._sessions.get(session_id)
-        if session is None:
-            return _ExecutionResult(
-                success=False,
-                error=(
-                    f"SessionExpiredError: Session {session_id} not found or has expired. "
-                    "Start a new session by passing session_id=\"\"."
-                ),
-            ).model_dump_json()
-
+        session = await self._get_or_start_session()
         try:
-            payload = await session.execute(code, self._execution_timeout)
+            payload = await session.execute(code, language, self._execution_timeout)
         except RuntimeError as exc:
-            self._sessions.pop(session_id, None)
-            await session.close()
+            await self._reset_session()
             return _ExecutionResult(success=False, error=str(exc)).model_dump_json()
-
-        if new_session:
-            payload["session_info"] = {
-                "session_id": session_id,
-                "instructions": _SESSION_INSTRUCTIONS,
-            }
 
         return _ExecutionResult(**payload).model_dump_json()
 
-    async def _start_session(self, session_id: str) -> _Session:
+    async def _get_or_start_session(self) -> _Session:
+        async with self._session_lock:
+            session = self._session
+            if session is None or not session.alive:
+                session = await self._start_session()
+                self._session = session
+            return session
+
+    async def _reset_session(self) -> None:
+        async with self._session_lock:
+            if self._session is not None:
+                await self._session.close()
+                self._session = None
+
+    async def _start_session(self) -> _Session:
+        container_name = f"agent_demo-runner-{secrets.token_hex(8)}"
         cmd = [
             self._docker_cmd, "run", "-i", "--rm",
-            "--name", f"agent_demo-runner-{session_id}",
+            "--name", container_name,
             "--network=none",
             f"--memory={self._memory_limit}",
             f"--cpus={self._cpu_limit}",
@@ -214,6 +194,7 @@ class DockerCodeInterpreterTool(BaseTool):
             "-e", "PYTHONDONTWRITEBYTECODE=1",
             "-e", "PYTHONIOENCODING=utf-8",
             "-v", f"{self._runner_path}:{_CONTAINER_RUNNER_PATH}:ro",
+            "-v", f"{self._skills_dir}:{_CONTAINER_SKILLS_PATH}:ro",
             self._image,
             "python", "-u", _CONTAINER_RUNNER_PATH,
         ]
@@ -223,9 +204,7 @@ class DockerCodeInterpreterTool(BaseTool):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        return _Session(session_id, proc)
+        return _Session(proc)
 
     async def close(self) -> None:
-        for session in list(self._sessions.values()):
-            await session.close()
-        self._sessions.clear()
+        await self._reset_session()

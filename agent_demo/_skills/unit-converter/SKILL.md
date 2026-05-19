@@ -35,5 +35,5 @@ The full unit list per category and the conversion factors live in [scripts/conv
 ## Resources
 
 - [examples.md](examples.md) — sample inputs and expected outputs covering each category.
-- [scripts/convert.py](scripts/convert.py) — the `convert_units(value, from_unit, to_unit)` implementation and the `fmt` helper used to format results.
-- [references/how-code-execution-works.md](references/how-code-execution-works.md) — how the `execute_code` tool runs the script, manages sessions, and combines `script_path` with `code`.
+- [scripts/convert.py](scripts/convert.py) — defines `convert_units(value, from_unit, to_unit)` and the `fmt` helper. Inside `execute_code` the same file is available at `/skills/unit-converter/scripts/convert.py`.
+- [references/how-code-execution-works.md](references/how-code-execution-works.md) — how the `execute_code` tool runs code, what's available in the sandbox, and the response shape.

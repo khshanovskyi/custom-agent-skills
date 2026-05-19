@@ -1,37 +1,57 @@
 # How `execute_code` Works
 
-`execute_code` runs Python in an isolated Docker container with **no network access**. Each `session_id` maps to one long-running container; variables and imports persist within a session.
+`execute_code` runs code in an isolated Docker container with **no network access**. A single long-running container per agent process is started on first use; Python state (variables, imports) persists across calls. Bash invocations are stateless.
 
 ---
 
 ## Parameters
 
-| Name          | Type   | Required | Purpose                                                                                                                                                                  |
-|---------------|--------|----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `code`        | string | yes      | Python source to execute. Multi-line is fine.                                                                                                                            |
-| `session_id`  | string | no       | Empty string (or omitted) starts a new session. Reuse the value returned in `session_info` for follow-up calls so state persists.                                        |
-| `script_path` | string | no       | Path under the skills root (e.g. `/unit-converter/scripts/convert.py`). When set, the file is read on the host and **prepended** to `code` as `<file>\n\n<code>` before being sent to the container. Saves tokens — you don't need to copy the script into the request. |
+| Name       | Type   | Required | Purpose                                                                                                                   |
+|------------|--------|----------|---------------------------------------------------------------------------------------------------------------------------|
+| `code`     | string | yes      | Source to execute. May be multi-line.                                                                                     |
+| `language` | string | no       | `"python"` (default) or `"bash"`. Python state persists across calls; each `bash` call runs in a fresh `bash -c` subshell. |
 
 ---
 
-## Session lifecycle
+## The `/skills` mount
 
-1. **Create** — first call with `session_id = ""` spawns a new container and returns a 16-hex-char id:
+The skills directory is bind-mounted **read-only** at `/skills` inside the sandbox. Every file under the host skills root is reachable from `code` without copying it into the request:
 
-   ```json
-   {
-     "success": true,
-     "output": ["..."],
-     "session_info": {
-       "session_id": "ab12cd34ef56...",
-       "instructions": "Reuse this session_id for subsequent calls in this conversation. Variables and imports persist within the session."
-     }
-   }
-   ```
+```python
+# Load a skill script directly from the mount.
+exec(open("/skills/unit-converter/scripts/convert.py").read())
+result, category = convert_units(100, "km", "miles")
+result, category
+```
 
-2. **Reuse** — pass that id on every follow-up call in the same conversation. Imports and variables defined on previous calls are still in scope.
+```bash
+# Same idea from bash.
+ls /skills/unit-converter/
+cat /skills/unit-converter/scripts/convert.py | head
+```
 
-3. **End** — the container is torn down when the agent_demo process exits, on per-call timeout, or if the container dies. Sending a stale id returns a `SessionExpiredError`; silently restart from step 1.
+---
+
+## Python REPL semantics
+
+Python execution is Jupyter-style: a trailing bare expression is auto-displayed via `repr()` (when its value is not `None`). You do **not** need to wrap every result in `print(...)`.
+
+```python
+1 + 2            # → "3" appears in output
+x = [1, 2, 3]    # nothing displayed (assignment)
+x                # → "[1, 2, 3]" appears in output
+print("hello")   # → "hello" appears in output (print returns None, no double-display)
+```
+
+State carries over between calls in the same conversation, so a script loaded on one call can be invoked on the next:
+
+```python
+# Call 1
+exec(open("/skills/unit-converter/scripts/convert.py").read())
+
+# Call 2 (later)
+convert_units(98.6, "fahrenheit", "celsius")
+```
 
 ---
 
@@ -44,16 +64,14 @@
   "result": null,
   "error": null,
   "traceback": [],
-  "files": [],
-  "session_info": null
+  "files": []
 }
 ```
 
-- `success` — `false` if user code raised.
-- `output` — captured `stdout` then `stderr`, each as a single string.
-- `error` — `"<ExceptionType>: <message>"` when `success=false`.
-- `traceback` — formatted traceback lines when `success=false`.
-- `session_info` — populated only on the call that **created** the session.
+- `success` — `false` if user code raised (Python) or `bash` exited non-zero.
+- `output` — captured stdout then stderr, each as a single string.
+- `error` — `"<ExceptionType>: <message>"` (Python) or `"bash exited with status <n>"` when `success=false`.
+- `traceback` — formatted Python traceback lines when `success=false`.
 - `result` / `files` — reserved; currently always `null` / `[]`.
 
 ---
@@ -66,23 +84,28 @@ The container is launched with:
 - `--cap-drop=ALL`, `--security-opt=no-new-privileges` — minimal Linux capabilities, no setuid escalation.
 - `--read-only` rootfs with a `tmpfs` at `/tmp` — file writes outside `/tmp` fail.
 - `--memory`, `--cpus`, `--pids-limit` — resource caps, fork-bomb protection.
+- `-v <skills_dir>:/skills:ro` — skills directory mounted read-only.
 - `PYTHONDONTWRITEBYTECODE=1` — Python won't try to write `.pyc` files on the read-only fs.
 
-Only the standard library and whatever's baked into the image (default: `python:3.11-slim`) is available. Adding packages requires building a custom image with them preinstalled.
+Only the standard library and whatever is baked into the image (default: `python:3.11-slim`) is available. Adding packages requires building a custom image with them preinstalled.
 
 ---
 
 ## Error cases the model should expect
 
-| Situation                  | Surface                                                                          | Recovery                                              |
-|----------------------------|----------------------------------------------------------------------------------|-------------------------------------------------------|
-| User code raises           | `success=false`, `error`, `traceback` populated; session stays alive             | Read the error, fix the code, retry in same session.  |
-| Per-call timeout exceeded  | `success=false`, `error` mentions timeout; session is killed                     | Start a new session and reload the script.            |
-| Stale `session_id`         | `success=false`, `error` starts with `SessionExpiredError:`                      | Silently restart from step 1 of the skill workflow.   |
-| Container exits unexpectedly | `success=false`, `error` mentions container/runner exit; session is removed     | Start a new session.                                  |
+| Situation                    | Surface                                                              | Recovery                                                              |
+|------------------------------|----------------------------------------------------------------------|-----------------------------------------------------------------------|
+| User code raises             | `success=false`, `error`, `traceback` populated; sandbox stays alive | Read the error, fix the code, retry — state is unchanged.             |
+| Per-call timeout exceeded    | `success=false`, `error` mentions timeout; sandbox is killed         | Retry — the next call starts a fresh container; reload any scripts.   |
+| Container exits unexpectedly | `success=false`, `error` mentions container/runner exit              | Retry — the next call starts a fresh container; reload any scripts.   |
 
 ---
 
 ## Protocol (informational)
 
-The host and the in-container runner exchange one JSON object per line over stdin/stdout. The host writes `{"code": "..."}\n`; the runner `exec`s it against a persistent globals dict and writes the response object back. This is internal — skills only see the tool call and its response.
+The host and the in-container runner exchange one JSON object per line over stdin/stdout:
+
+- host → runner: `{"code": "...", "language": "python"|"bash"}`
+- runner → host: the response object shown above
+
+This is internal — skills only see the tool call and its response.

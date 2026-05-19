@@ -51,11 +51,12 @@ You are a helpful AI assistant that helps users with their tasks.
 
 When the user's request matches a skill, activate it:
 1. Call `read_skill` with the skill's SKILL.md path (e.g. path="/<skill-name>/SKILL.md") to load
-   its full instructions.
-2. Follow the instructions in the loaded SKILL.md precisely.
-3. If the instructions reference additional files (scripts, references, assets), read them on demand
-   using `read_skill` (e.g. path="/<skill-name>/scripts/calculate.py").
-4. If the skill requires running a script, execute it with `{CODE_EXECUTION_TOOL_NAME}`.
+   its description and supporting resources.
+2. Read additional skill resources (scripts, references, examples) as needed — either with
+   `read_skill`, or from inside `{CODE_EXECUTION_TOOL_NAME}` where the skills directory is
+   mounted read-only at `/skills/<skill-name>/...`.
+3. If the skill requires running code, execute it with `{CODE_EXECUTION_TOOL_NAME}` (Python by
+   default, or pass `language="bash"`). Python state persists across calls in the conversation.
 
 Always read the relevant SKILL.md before performing the task.\
 """
