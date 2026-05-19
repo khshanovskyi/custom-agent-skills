@@ -49,7 +49,7 @@ unit-converter/
 - `compatibility` ≤500 chars;
 - invalid skills are **skipped with a warning, not raised**.
 
-`app.build_system_prompt` then serializes the validated frontmatter into an `<available_skills>` XML block (`_build_available_skills_xml`) and embeds it in the system prompt along with a short "how to use skills" protocol. **Body content is not loaded up front** — the model must call `read_skill` to fetch it. That is the core token-saving design.
+`prompt_utils.build_system_prompt` then serializes the validated frontmatter into an `<available_skills>` XML block (`_build_available_skills_xml`) and embeds it in the system prompt along with a short "how to use skills" protocol. **Body content is not loaded up front** — the model must call `read_skill` to fetch it. That is the core token-saving design.
 
 ## Tools
 
@@ -114,8 +114,9 @@ Known limitation: background threads in user code that print after `exec()` retu
 
 ```
 agent_demo/
-  app.py                                # entry point: REPL, system prompt, wiring
+  app.py                                # entry point: REPL, wiring
   agent.py                              # recursive tool-using chat loop
+  prompt_utils.py                       # system prompt + <available_skills> XML
   models/
     skill.py                            # SkillMetadata + load_skills (validation)
     message.py  role.py  conversation.py
