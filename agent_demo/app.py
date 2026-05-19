@@ -42,6 +42,9 @@ def build_system_prompt(skills: list[SkillMetadata]) -> str:
     return f"""\
 You are a helpful AI assistant that helps users with their tasks.
 
+# Skills
+
+## Available skills
 {_build_available_skills_xml(skills)}
 
 ## How to use skills
