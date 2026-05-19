@@ -77,13 +77,14 @@ async def main():
         )
     ]
 
-    code_interpreter = DockerCodeInterpreterTool(
-        skills_dir=SKILLS_DIR,
-        image=DOCKER_IMAGE,
-    )
     tools: list[BaseTool] = [
-        ReadSkillTool(skills_dir=SKILLS_DIR),
-        code_interpreter,
+        ReadSkillTool(
+            skills_dir=SKILLS_DIR
+        ),
+        DockerCodeInterpreterTool(
+            skills_dir=SKILLS_DIR,
+            image=DOCKER_IMAGE,
+        ),
     ]
 
     agent = Agent(
