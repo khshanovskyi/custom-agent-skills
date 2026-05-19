@@ -71,12 +71,7 @@ async def main():
 
     system_prompt = build_system_prompt(skills)
     print(f"📄 System prompt: \n {system_prompt}")
-    messages: list[Message] = [
-        Message(
-            role=Role.SYSTEM,
-            content=system_prompt
-        )
-    ]
+    messages: list[Message] = []
 
     code_interpreter = DockerCodeInterpreterTool(
         skills_dir=SKILLS_DIR,
@@ -90,7 +85,8 @@ async def main():
     agent = Agent(
         client=OpenAI(api_key=OPENAI_API_KEY),
         model="gpt-5.2",
-        tools=tools
+        instructions=system_prompt,
+        tools=tools,
     )
 
     try:
