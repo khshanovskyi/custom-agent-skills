@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Any
 
-from agent_demo.file_utils import get_file_content
 from agent_demo.tools.base import BaseTool
 
 
@@ -44,4 +43,10 @@ class ReadSkillTool(BaseTool):
         raw_path = arguments["path"].lstrip("/")
         full_path = (self._skills_dir / raw_path).resolve()
 
-        return get_file_content(full_path)
+        if not full_path.exists():
+            return f"ERROR: File not found: {full_path}"
+
+        if not full_path.is_file():
+            return f"ERROR: Not a file: {full_path}"
+
+        return full_path.read_text(encoding="utf-8")
