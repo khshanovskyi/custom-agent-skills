@@ -1,6 +1,6 @@
 # agent_demo
 
-A teaching/demo implementation of **Anthropic-style skills** wired to the OpenAI Chat Completions API. The agent decides when to activate a skill, lazy-loads its files via a `read_skill` tool, and runs code inside a network-isolated Docker sandbox via `execute_code`.
+A teaching/demo implementation of **Anthropic-style skills** wired to the OpenAI Chat Completions API (GPT) or Anthropic Messages API (Claude). The agent decides when to activate a skill, lazy-loads its files via a `read_skill` tool, and runs code inside a network-isolated Docker sandbox via `execute_code`.
 
 The key idea on display is **progressive disclosure**: only skill *frontmatter* is loaded into the system prompt up front; the body and supporting files are fetched on demand. That keeps the context window small while many skills remain available.
 
@@ -10,13 +10,16 @@ The key idea on display is **progressive disclosure**: only skill *frontmatter* 
 
 ```bash
 pip install -r requirements.txt      # from the repo root
-export OPENAI_API_KEY=...             # required
-# The Docker daemon must be running (default image: python:3.11-slim,
-# auto-pulled on first use; the container itself runs with --network=none).
-python -m agent_demo.app
+# Add your API key to a .env file in the repo root:
+#   ANTHROPIC_API_KEY=sk-ant-...   (Claude — recommended)
+#   OPENAI_API_KEY=sk-proj-...     (GPT)
+# The Docker daemon must be running (image pinned to python@sha256:…,
+# auto-pulled on first use; the container runs with --network=none).
+python -m agent_demo.app_claude   # Claude (recommended)
+python -m agent_demo.app          # GPT
 ```
 
-Type a request at the `➡️:` prompt; `exit` to quit. The model is hard-coded to `gpt-5.2` in `app.py`.
+Type a request at the `➡️:` prompt; `exit` to quit. Models are hard-coded in `app_claude.py` (`claude-sonnet-4-6`) and `app.py` (`gpt-5.2`).
 
 ## How the agent runs
 
@@ -65,15 +68,20 @@ Runs Python or bash inside a sandboxed Docker container with no network access.
 
 **Parameters**
 
-| name       | type   | required | meaning                                                |
-|------------|--------|----------|--------------------------------------------------------|
-| `code`     | string | yes      | source to execute (multi-line ok)                      |
-| `language` | string | no       | `"python"` (default) or `"bash"`                       |
+| name       | type   | required | meaning                                                                                      |
+|------------|--------|----------|----------------------------------------------------------------------------------------------|
+| `code`     | string | yes      | source to execute (multi-line ok)                                                            |
+| `language` | string | no       | `"python"` (default) or `"bash"`                                                             |
+| `skill`    | string | no       | name of the active skill (e.g. `"unit-converter"`). Routes the call to that skill's dedicated container. Unknown values are silently ignored. Always pass this. |
 
 **Container lifecycle**
 
-- One container per tool instance, started **lazily on the first call** and reused for the rest of the process lifetime.
-- The container is torn down by `tool.close()` (called from `app.main`'s `finally`), on per-call timeout (default 30s), or if it dies — the next call starts a fresh one.
+- **One container per skill**, started lazily on first use and kept alive for the current user turn.
+- **No reset on skill switch** — switching skills routes to a different container in the pool; both stay warm.
+- **Turn-boundary wipe** — `app.main` calls `reset_all()` after every assistant reply, destroying all containers. Prevents secrets from leaking into subsequent turns.
+- **Subagent isolation** — each `DockerCodeInterpreterTool` instance owns its own `_sessions` pool; a subagent that creates a new instance gets an empty pool with no shared state.
+- On per-call timeout (default 30s) or container crash, that skill's container is removed from the pool; the next call restarts it.
+- `tool.close()` (called from `app.main`'s `finally`) calls `reset_all()` to drain the pool on exit.
 
 **Sandbox flags** (set in `_start_session`):
 
@@ -86,7 +94,7 @@ Runs Python or bash inside a sandboxed Docker container with no network access.
 
 **State semantics**
 
-- **Python state (variables, imports) persists across calls** within the agent process — the runner keeps one shared globals dict.
+- **Python state (variables, imports) persists across all calls within the same turn** — the runner keeps one shared globals dict per container; state is wiped between turns by `reset_all()`.
 - **Bash invocations are stateless** — each runs in a fresh `bash -c` subshell.
 
 **Python is Jupyter-style**: a trailing bare expression is auto-displayed via `repr()` (when its value is not `None`), so the model does not need to wrap every result in `print(...)`.
@@ -114,8 +122,10 @@ Known limitation: background threads in user code that print after `exec()` retu
 
 ```
 agent_demo/
-  app.py                                # entry point: REPL, wiring
-  agent.py                              # recursive tool-using chat loop
+  app.py                                # entry point (GPT): REPL, wiring
+  app_claude.py                         # entry point (Claude): REPL, wiring
+  agent.py                              # recursive tool-using chat loop (OpenAI Responses API)
+  agent_claude.py                       # recursive tool-using chat loop (Anthropic Messages API)
   prompt_utils.py                       # system prompt + <available_skills> XML
   models/
     skill.py                            # SkillMetadata + load_skills (validation)

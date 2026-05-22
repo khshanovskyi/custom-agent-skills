@@ -1,5 +1,6 @@
 import json
 import os
+import time
 
 import anthropic
 from pathlib import Path
@@ -79,7 +80,9 @@ def chat(client: anthropic.Anthropic, skill_id: str, log_request: bool=True, log
             print("---------------\n")
 
 
+        t0 = time.perf_counter()
         response = client.beta.messages.create(**request_payload)
+        print(f"⏱️  Claude API: {(time.perf_counter() - t0) * 1000:.0f} ms")
 
         if log_response:
             print("\n--- RESPONSE ---")
