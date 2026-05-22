@@ -16,7 +16,9 @@ from agent_demo.tools.skills.read_skill_tool import ReadSkillTool
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 
 SKILLS_DIR = Path(__file__).parent / "_skills"
-DOCKER_IMAGE = "python:3.11-slim"
+# Pinned to a specific digest to prevent supply-chain risk from floating tags.
+# To update: docker inspect --format='{{index .RepoDigests 0}}' python:3.11-slim
+DOCKER_IMAGE = "python@sha256:2c285c669cc837aa3bcf1af23ea1932b7b5214f9c9d3aad22417446ad91cb4fb"
 
 
 async def main():
@@ -41,9 +43,11 @@ async def main():
     #      agent lifetime, bind-mounts _skills/ read-only at /skills, and runs a
     #      persistent Python kernel (state survives across execute_code calls).
     #    - ReadSkillTool lets the model fetch any file under _skills/ by relative path.
+    known_skills = frozenset(s.name for s in skills)
     code_interpreter = DockerCodeInterpreterTool(
         skills_dir=SKILLS_DIR,
         image=DOCKER_IMAGE,
+        known_skills=known_skills,
     )
     tools: list[BaseTool] = [
         ReadSkillTool(skills_dir=SKILLS_DIR),
@@ -82,6 +86,7 @@ async def main():
                 log_messages=True,
             )
             messages.append(assistant_message)
+            await code_interpreter.reset_all()
     finally:
         # 6. Cleanup: guarantees the Docker sandbox is torn down on exit, Ctrl-C,
         #    or exception — otherwise the container would leak.

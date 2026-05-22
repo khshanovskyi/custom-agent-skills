@@ -49,28 +49,79 @@ API. It shows what the providers' Skills features actually do under the hood:
 - Only skill **metadata** is injected into the system prompt (as an `<available_skills>` XML block) — bodies are
   lazy-loaded.
 - The agent decides when to activate a skill and pulls its files on demand via a `read_skill` tool.
-- Scripts execute inside a **network-isolated Docker container** (`--network=none`, dropped caps, read-only FS,
-  memory/CPU limits) managed by a `DockerCodeInterpreterTool`. Per-session containers preserve kernel state across
-  calls.
+- Scripts execute inside **network-isolated Docker containers** (`--network=none`, dropped caps, read-only FS,
+  memory/CPU limits) managed by `DockerCodeInterpreterTool` — one container per skill, pooled for the turn.
+
+#### Container lifecycle & sharing rules
+
+> **Keep this section up to date** whenever container or tool wiring changes.
+
+- **One container per skill, pooled within a turn.** Each skill gets its own container started lazily on first
+  `execute_code` call. Containers are kept alive across all tool calls within the same user turn — no restart cost
+  when the same skill is called multiple times in one turn, and no cross-skill state contamination.
+- **Turn-boundary wipe.** `reset_all()` is called by `app.main` after each assistant reply, destroying all live
+  containers. Secrets processed during a turn cannot leak into subsequent turns.
+- **Subagents get their own pool.** Container lifetime is bound to the `DockerCodeInterpreterTool` instance
+  (`_sessions` dict). A subagent that constructs a new instance starts with an empty pool — no shared state with
+  the parent. There is no mechanism to share containers across agent boundaries.
+- **Image pinned to digest.** Both `app.py` and `app_claude.py` reference `python@sha256:<digest>` instead of the
+  floating `python:3.11-slim` tag, closing supply-chain risk from unexpected image updates. To refresh:
+  `docker inspect --format='{{index .RepoDigests 0}}' python:3.11-slim`.
+- **Skill name whitelist.** `DockerCodeInterpreterTool` accepts a `known_skills` frozenset at construction
+  (populated from loaded skills). Unknown `skill` values in `execute_code` are silently dropped and warned,
+  preventing a malicious `SKILL.md` from spoofing another skill's container.
 
 ### Running it
 
-You'll need **Docker** running locally (the default image `python:3.11-slim` is auto-pulled on first use) and an
-`OPENAI_API_KEY`.
+You'll need **Docker** running locally (image pinned to `python@sha256:…`, pulled on first use) and either
+an `ANTHROPIC_API_KEY` (Claude) or an `OPENAI_API_KEY` (GPT).
+
+#### 1. Start Docker Desktop
+
+Docker Desktop must be running before you launch the app — the agent starts containers on demand but cannot start the
+daemon itself.
+
+**macOS / Windows:** Launch Docker Desktop from your Applications folder or Start menu, then wait for the whale icon in
+the menu bar / system tray to stop animating.
+
+**Linux:** Start the Docker daemon if it isn't already running:
+```bash
+sudo systemctl start docker
+```
+
+Verify Docker is ready:
+
+**macOS / Linux:**
+```bash
+docker ps   # should return an empty table, not an error
+```
+
+**Windows (PowerShell) — wait until the daemon is up:**
+```powershell
+while ($true) { docker ps *>$null; if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 1; Write-Host "waiting for Docker..." }
+```
+
+> **Tip (Windows):** To have Docker Desktop start automatically with Windows, open Docker Desktop → Settings →
+> General → enable *"Start Docker Desktop when you sign in to your computer"*.
+
+#### 2. Install dependencies and run
 
 ```bash
 # 1. Create and activate a virtual environment
-python3 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate          # on Windows: .venv\Scripts\activate
 
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Export your API key
-export OPENAI_API_KEY=sk-proj-...
+# 3. Add your API key to a .env file in the project root
+echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env   # Claude
+# or
+echo 'OPENAI_API_KEY=sk-proj-...' > .env     # GPT
 
 # 4. Run the app
-python -m agent_demo.app
+python -m agent_demo.app_claude   # Claude (recommended)
+python -m agent_demo.app          # GPT
 ```
 
 You'll get an interactive `➡️:` prompt. Try something like *"convert 5 miles to kilometers"* to trigger the bundled
